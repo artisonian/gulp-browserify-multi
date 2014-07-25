@@ -1,28 +1,57 @@
-var gulp = require('gulp');
+var path = require('path');
 
-var concat = require('gulp-concat');
-var uglify = require('gulp-uglify');
-var transpile = require('gulp-es6-module-transpiler');
+var gulp = require('gulp');
+var gutil = require('gulp-util');
+
+var browserify = require('browserify');
+var source = require('vinyl-source-stream');
+var browserSync = require('browser-sync');
+var reload = browserSync.reload;
 
 var paths = {
+  base: './lib',
   dest: 'dist',
 
   // file extensions
   html: 'lib/**/*.html',
-  js: 'lib/**/*.js'
+  js: 'lib/**/app.js'
 };
 
 gulp.task('scripts', function () {
-  gulp.src(paths.js)
-    .pipe(transpile({ type: 'cjs' }))
-    //.pipe(concat('app.min.js')) // this makes one file period, not one per directory
-    //.pipe(uglify())
-    .pipe(gulp.dest(paths.dest));
+  var bundle = function (err, files) {
+    if (err) { return gutil.log(err); }
+
+    files.forEach(function (f) {
+      var basedir = path.dirname(f.path);
+      var outfile = gutil.replaceExtension(f.relative, '.min.js');
+
+      browserify(f, { basedir: basedir })
+        .transform({ global: true }, 'uglifyify')
+        .bundle()
+        .pipe(source(outfile))
+        .pipe(gulp.dest(paths.dest));
+    });
+  };
+
+  return gulp.src(paths.js)
+    .pipe(gutil.buffer(bundle))
+    .pipe(reload({ stream: true }));
 });
 
 gulp.task('templates', function () {
-  gulp.src(paths.html)
-    .pipe(gulp.dest(paths.dest));
+  return gulp.src(paths.html)
+    .pipe(gulp.dest(paths.dest))
+    .pipe(reload({ stream: true }));
 });
 
-gulp.task('default', ['templates', 'scripts']);
+gulp.task('browser-sync', function () {
+  browserSync({
+    server: { baseDir: paths.dest }
+  });
+});
+
+gulp.task('build', ['templates', 'scripts']);
+
+gulp.task('default', ['build', 'browser-sync'], function () {
+  gulp.watch('lib/**/*', ['build']);
+});
